@@ -1,0 +1,6 @@
+RESNET:
+  FIXED_BLOCKS: 3
+
+DATASETS:
+  GOR:
+    HOME: ""
