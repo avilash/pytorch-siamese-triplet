@@ -11,6 +11,8 @@ __C.RESNET.FIXED_BLOCKS = 1
 __C.DATASETS = edict()
 __C.DATASETS.GOR = edict()
 __C.DATASETS.GOR.HOME = ""
+__C.DATASETS.S2S = edict()
+__C.DATASETS.S2S.HOME = ""
 
 def _merge_a_into_b(a, b):
     """Merge config dictionary a into config dictionary b, clobbering the

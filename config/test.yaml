@@ -4,3 +4,5 @@ RESNET:
 DATASETS:
   GOR:
     HOME: ""
+  S2S:
+    HOME: ""

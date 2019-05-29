@@ -2,6 +2,7 @@ import os
 import os.path
 
 import cv2
+import numpy as np
 
 import torch.utils.data
 import torchvision.transforms as transforms
@@ -16,14 +17,24 @@ class TripletImageLoader(torch.utils.data.Dataset):
         img1 = cv2.imread(img1)
         img2 = cv2.imread(img2)
         img3 = cv2.imread(img3)
-        img1 = cv2.resize(img1, (228, 228))
-        img2 = cv2.resize(img2, (228, 228))
-        img3 = cv2.resize(img3, (228, 228))
+        try:
+            img1 = cv2.resize(img1, (228, 228))
+        except Exception, e:
+            img1 = np.zeros((228, 228, 3), dtype=np.uint8)
+        try:
+            img2 = cv2.resize(img2, (228, 228))
+        except Exception, e:
+            img2 = np.zeros((228, 228, 3), dtype=np.uint8)
+        try:
+            img3 = cv2.resize(img3, (228, 228))
+        except Exception, e:
+            img3 = np.zeros((228, 228, 3), dtype=np.uint8)
+
         if self.transform is not None:
             img1 = self.transform(img1)
             img2 = self.transform(img2)
             img3 = self.transform(img3)
-
+        
         return img1, img2, img3
 
     def __len__(self):

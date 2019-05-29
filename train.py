@@ -7,21 +7,39 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 from torchvision import datasets, transforms
+from torchvision.datasets import MNIST, FashionMNIST
 from torch.autograd import Variable
 import torch.backends.cudnn as cudnn
 
 from model import net, embedding
-from dataloader import gor
+from dataloader import gor, s2s, mnist
 from triplet_img_loader import TripletImageLoader
+from triplet_mnist_loader import TripletMNISTLoader
 
 from gen_utils import make_dir_if_not_exist
 
 from base_config import cfg, cfg_from_file
 
 import cv2
+import numpy as np
+import matplotlib.pyplot as plt
 
-#Config
+def visualise(imgs, txts, dst):
+	f, axs = plt.subplots(1, len(imgs), figsize=(24, 9))
+	f.tight_layout()
+	for ax, img, txt in zip(axs, imgs, txts):
+		ax.imshow(img)
+		ax.set_title(txt, fontsize=20)
+	plt.subplots_adjust(left=0., right=1, top=0.95, bottom=0.)
+	if dst is not "":
+		plt.savefig(dst)
+	plt.show()
 
+def vis_with_paths(img_paths, txts, dst):
+	imgs = []
+	for img_path in img_paths:
+		imgs.append(cv2.imread(img_path))
+	visualise(imgs, txts, dst)
 
 def main():
 	
@@ -33,31 +51,87 @@ def main():
 	exp_dir = os.path.join("data", args.exp_name)
 	make_dir_if_not_exist(exp_dir)
 
-	train_triplets = []
-	test_triplets = []
-	triplet_loader = gor.GOR(classes)
-	triplet_loader.load()
-	for i in range(args.num_train_samples):
-		train_triplets.append(triplet_loader.getTriplet())
-	for i in range(args.num_test_samples):
-		test_triplets.append(triplet_loader.getTriplet())
+	train_data_loader = None
+	test_data_loader = None
+	embeddingNet = None
 	kwargs = {'num_workers': 1, 'pin_memory': True} if args.cuda else {}
-	train_data_loader = torch.utils.data.DataLoader(
-        TripletImageLoader(train_triplets,
-                       transform=transforms.Compose([
-                           transforms.ToTensor(),
-                           transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
-                       ])),
-        batch_size=args.batch_size, shuffle=True, **kwargs)
-	test_data_loader = torch.utils.data.DataLoader(
-        TripletImageLoader(test_triplets,
-                       transform=transforms.Compose([
-                           transforms.ToTensor(),
-                           transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
-                       ])),
-        batch_size=args.batch_size, shuffle=True, **kwargs)
 
-	embeddingNet = embedding.Embedding()
+	if args.dataset == 's2s':
+		train_triplets = []
+		test_triplets = []
+		triplet_loader = s2s.S2S()
+		train_len, test_len = triplet_loader.load()
+		print "Train pairs = %d"%(train_len)
+		print "Test pairs = %d"%(test_len)
+		sku, product_img_name, pos_img_name, neg_img_name = triplet_loader.getTriplet()
+		# vis_with_paths([product_img_name, pos_img_name, neg_img_name], ["", "", sku], "")
+		# return
+		for i in range(5000):
+			sku, product_img_name, pos_img_name, neg_img_name = triplet_loader.getTriplet()
+			train_triplets.append([product_img_name, pos_img_name, neg_img_name])
+		for i in range(1000):
+			sku, product_img_name, pos_img_name, neg_img_name = triplet_loader.getTriplet(set="test")
+			test_triplets.append([product_img_name, pos_img_name, neg_img_name])
+
+		train_data_loader = torch.utils.data.DataLoader(
+		TripletImageLoader(train_triplets,
+		               transform=transforms.Compose([
+		                   transforms.ToTensor(),
+		                   transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
+		               ])),
+		batch_size=args.batch_size, shuffle=True, **kwargs)
+		test_data_loader = torch.utils.data.DataLoader(
+		TripletImageLoader(test_triplets,
+		               transform=transforms.Compose([
+		                   transforms.ToTensor(),
+		                   transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
+		               ])),
+		batch_size=args.batch_size, shuffle=True, **kwargs)
+
+		embeddingNet = embedding.EmbeddingResnet()
+	
+	elif (args.dataset == 'mnist') or (args.dataset == 'fmnist'):
+		train_triplets = []
+		test_triplets = []
+		if args.dataset == 'mnist':
+			train_dataset = MNIST('data/MNIST', train=True, download=True)
+			test_dataset = MNIST('data/MNIST', train=False, download=True)
+		if args.dataset == 'fmnist':
+			train_dataset = FashionMNIST('data/FashionMNIST', train=True, download=True)
+			test_dataset = FashionMNIST('data/FashionMNIST', train=False, download=True)
+		triplet_loader = mnist.MNIST_DS(train_dataset, test_dataset)
+		triplet_loader.load()
+		pos_label, neg_label, pos_anchor, pos_img, neg_img = triplet_loader.getTriplet()
+		# visualise([pos_anchor, pos_img, neg_img], ["", str(pos_label), str(neg_label)], "")
+		# return
+		for i in range(50000):
+			pos_label, neg_label, pos_anchor, pos_img, neg_img = triplet_loader.getTriplet()
+			train_triplets.append([pos_anchor, pos_img, neg_img])
+		for i in range(10000):
+			pos_label, neg_label, pos_anchor, pos_img, neg_img = triplet_loader.getTriplet(set="test")
+			test_triplets.append([pos_anchor, pos_img, neg_img])
+
+		train_data_loader = torch.utils.data.DataLoader(
+		TripletMNISTLoader(train_triplets,
+		               transform=transforms.Compose([
+		                   transforms.ToTensor(),
+		                   transforms.Normalize((0.485,), (0.229,))
+		               ])),
+		batch_size=args.batch_size, shuffle=True, **kwargs)
+		test_data_loader = torch.utils.data.DataLoader(
+		TripletMNISTLoader(test_triplets,
+		               transform=transforms.Compose([
+		                   transforms.ToTensor(),
+		                   transforms.Normalize((0.485,), (0.229,))
+		               ])),
+		batch_size=args.batch_size, shuffle=True, **kwargs)
+
+		embeddingNet = embedding.EmbeddingLeNet()
+
+	else:
+		print "Dataset %s not supported "%(args.dataset)
+		return
+
 	model = net.TripletNet(embeddingNet)
 	if args.cuda:
 		model = model.cuda()
@@ -93,6 +167,7 @@ def main():
 		save_checkpoint(model_to_save, file_name)
 
 def train(data, model, criterion, optimizer, epoch):
+	print ("Training ...")
 	total_loss = 0
 	model.train()
 	for batch_idx, img_triplet in enumerate(data):
@@ -119,11 +194,13 @@ def train(data, model, criterion, optimizer, epoch):
 		loss.backward()
 		optimizer.step()
 		
-		if batch_idx%500 == 0:
-			print('Train Epoch: {} [{}/{}] \t Loss: {:.4f}'.format(epoch, batch_idx, len(data), total_loss/500))
+		log_step = args.train_log_step
+		if (batch_idx%log_step == 0) and (batch_idx!=0):
+			print('Train Epoch: {} [{}/{}] \t Loss: {:.4f}'.format(epoch, batch_idx, len(data), total_loss/log_step))
 			total_loss = 0
 
 def test(data, model):
+	print ("Testing ...")
 	model.eval()
 	accuracy = 0
 	for batch_idx, img_triplet in enumerate(data):
@@ -146,7 +223,6 @@ def test(data, model):
 def save_checkpoint(state, file_name):
     torch.save(state, file_name)
 
-
 if __name__ == '__main__':	
 	parser = argparse.ArgumentParser(description='PyTorch Siamese Example')
 	parser.add_argument('--exp_name', default='exp0', type=str,
@@ -155,7 +231,7 @@ if __name__ == '__main__':
 	                help='enables CUDA training')
 	parser.add_argument('--epochs', type=int, default=10, metavar='N',
 	                help='number of epochs to train (default: 10)')
-	parser.add_argument('--batch_size', type=int, default=2, metavar='N',
+	parser.add_argument('--batch_size', type=int, default=64, metavar='N',
 	                help='input batch size for training (default: 64)')
 	parser.add_argument('--lr', type=float, default=0.01, metavar='LR',
 	                help='learning rate (default: 0.01)')
@@ -165,14 +241,20 @@ if __name__ == '__main__':
 	                help='margin for triplet loss (default: 1.0)')
 	parser.add_argument('--ckp', default=None, type=str,
 	                help='path to load checkpoint')
+
+	parser.add_argument('--dataset', type=str, default='mnist', metavar='M',
+	                help='number of training samples (default: 3000)')
+	
 	parser.add_argument('--num_train_samples', type=int, default=10000, metavar='M',
 	                help='number of training samples (default: 3000)')
 	parser.add_argument('--num_test_samples', type=int, default=2000, metavar='M',
 	                help='number of test samples (default: 1000)')	
 
-	global args, classes
-	classes = ["2", "6", "7", "8", "9", "10", "21", "22", "23", "24", "50", "52", "53", "54", "56"]
+	parser.add_argument('--train_log_step', type=int, default=100, metavar='M',
+	                help='Number of iterations after which to log the loss')
+
+	global args
 	args = parser.parse_args()
-	args.cuda = not args.cuda and torch.cuda.is_available()
-	cfg_from_file("config/resnet.yaml")
+	args.cuda = args.cuda and torch.cuda.is_available()
+	cfg_from_file("config/test.yaml")
 	main()
