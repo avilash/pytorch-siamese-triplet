@@ -40,9 +40,9 @@ class EmbeddingLeNet(nn.Module):
 
         self.fc = nn.Sequential(nn.Linear(64 * 4 * 4, 256),
                                 nn.PReLU(),
-                                nn.Linear(256, 256),
+                                nn.Linear(256, 128),
                                 nn.PReLU(),
-                                nn.Linear(256, 2)
+                                nn.Linear(128, 64)
                                 )
 
     def forward(self, x):

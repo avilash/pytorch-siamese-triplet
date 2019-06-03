@@ -51,9 +51,53 @@ def main():
 	exp_dir = os.path.join("data", args.exp_name)
 	make_dir_if_not_exist(exp_dir)
 
+	embeddingNet = None
+	if args.dataset == 's2s':
+		embeddingNet = embedding.EmbeddingResnet()
+	elif (args.dataset == 'mnist') or (args.dataset == 'fmnist'):
+		embeddingNet = embedding.EmbeddingLeNet()
+	else:
+		print "Dataset %s not supported "%(args.dataset)
+		return
+
+	model = net.TripletNet(embeddingNet)
+	if args.cuda:
+		model = model.cuda()
+
+	if args.ckp:
+		if os.path.isfile(args.ckp):
+			print("=> Loading checkpoint '{}'".format(args.ckp))
+			checkpoint = torch.load(args.ckp)
+			model.load_state_dict(checkpoint['state_dict'])
+			print("=> Loaded checkpoint '{}'".format(args.ckp))
+        else:
+            print("=> No checkpoint found at '{}'".format(args.ckp)) 
+
+	cudnn.benchmark = True
+
+	params = []
+	for key, value in dict(model.named_parameters()).items():
+		if value.requires_grad:
+			params += [{'params':[value]}]
+
+	criterion = torch.nn.MarginRankingLoss(margin = args.margin)
+	optimizer = optim.SGD(params, lr=args.lr, momentum=args.momentum)
+
+	for epoch in range(1, args.epochs + 1):
+		train_data_loader, test_data_loader = sample_data()
+		train(train_data_loader, model, criterion, optimizer, epoch)
+		test(test_data_loader, model)
+		model_to_save = {
+			"epoch" : epoch + 1,
+			'state_dict': model.state_dict(),
+		}
+		file_name = os.path.join(exp_dir, "checkpoint_" + str(epoch) + ".pth")
+		save_checkpoint(model_to_save, file_name)
+
+def sample_data():
 	train_data_loader = None
 	test_data_loader = None
-	embeddingNet = None
+	
 	kwargs = {'num_workers': 1, 'pin_memory': True} if args.cuda else {}
 
 	if args.dataset == 's2s':
@@ -87,8 +131,6 @@ def main():
 		                   transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
 		               ])),
 		batch_size=args.batch_size, shuffle=True, **kwargs)
-
-		embeddingNet = embedding.EmbeddingResnet()
 	
 	elif (args.dataset == 'mnist') or (args.dataset == 'fmnist'):
 		train_triplets = []
@@ -104,10 +146,10 @@ def main():
 		pos_label, neg_label, pos_anchor, pos_img, neg_img = triplet_loader.getTriplet()
 		# visualise([pos_anchor, pos_img, neg_img], ["", str(pos_label), str(neg_label)], "")
 		# return
-		for i in range(50000):
+		for i in range(args.num_train_samples):
 			pos_label, neg_label, pos_anchor, pos_img, neg_img = triplet_loader.getTriplet()
 			train_triplets.append([pos_anchor, pos_img, neg_img])
-		for i in range(10000):
+		for i in range(args.num_test_samples):
 			pos_label, neg_label, pos_anchor, pos_img, neg_img = triplet_loader.getTriplet(set="test")
 			test_triplets.append([pos_anchor, pos_img, neg_img])
 
@@ -126,45 +168,7 @@ def main():
 		               ])),
 		batch_size=args.batch_size, shuffle=True, **kwargs)
 
-		embeddingNet = embedding.EmbeddingLeNet()
-
-	else:
-		print "Dataset %s not supported "%(args.dataset)
-		return
-
-	model = net.TripletNet(embeddingNet)
-	if args.cuda:
-		model = model.cuda()
-
-	if args.ckp:
-		if os.path.isfile(args.ckp):
-			print("=> Loading checkpoint '{}'".format(args.ckp))
-			checkpoint = torch.load(args.ckp)
-			model.load_state_dict(checkpoint['state_dict'])
-			print("=> Loaded checkpoint '{}'".format(args.ckp))
-        else:
-            print("=> No checkpoint found at '{}'".format(args.ckp)) 
-
-	cudnn.benchmark = True
-
-	params = []
-	for key, value in dict(model.named_parameters()).items():
-		if value.requires_grad:
-			params += [{'params':[value]}]
-
-	criterion = torch.nn.MarginRankingLoss(margin = args.margin)
-	optimizer = optim.SGD(params, lr=args.lr, momentum=args.momentum)
-
-	test(test_data_loader, model)
-	for epoch in range(1, args.epochs + 1):
-		train(train_data_loader, model, criterion, optimizer, epoch)
-		test(test_data_loader, model)
-		model_to_save = {
-			"epoch" : epoch + 1,
-			'state_dict': model.state_dict(),
-		}
-		file_name = os.path.join(exp_dir, "checkpoint_" + str(epoch) + ".pth")
-		save_checkpoint(model_to_save, file_name)
+	return train_data_loader, test_data_loader
 
 def train(data, model, criterion, optimizer, epoch):
 	print ("Training ...")
@@ -212,7 +216,7 @@ def test(data, model):
 		dist_E1_E2 = F.pairwise_distance(E1, E2, 2)
 		dist_E1_E3 = F.pairwise_distance(E1, E3, 2)
 
-		prediction = (dist_E1_E3 - dist_E1_E2 - args.margin).cpu().data
+		prediction = (dist_E1_E3 - dist_E1_E2 - args.margin/2.0).cpu().data
 		prediction = prediction.view(prediction.numel())
 		prediction = (prediction > 0).float()
 		batch_acc = prediction.sum()*1.0/prediction.numel()
@@ -245,9 +249,9 @@ if __name__ == '__main__':
 	parser.add_argument('--dataset', type=str, default='mnist', metavar='M',
 	                help='number of training samples (default: 3000)')
 	
-	parser.add_argument('--num_train_samples', type=int, default=10000, metavar='M',
+	parser.add_argument('--num_train_samples', type=int, default=50000, metavar='M',
 	                help='number of training samples (default: 3000)')
-	parser.add_argument('--num_test_samples', type=int, default=2000, metavar='M',
+	parser.add_argument('--num_test_samples', type=int, default=10000, metavar='M',
 	                help='number of test samples (default: 1000)')	
 
 	parser.add_argument('--train_log_step', type=int, default=100, metavar='M',
