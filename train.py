@@ -90,12 +90,12 @@ def main():
 			params += [{'params':[value]}]
 
 	criterion = torch.nn.MarginRankingLoss(margin = args.margin)
-	optimizer = optim.SGD(params, lr=args.lr, momentum=args.momentum)
+	optimizer = optim.Adam(params, lr=args.lr)
 
 	for epoch in range(1, args.epochs + 1):
 		train_data_loader, test_data_loader = sample_data()
+		test(test_data_loader, model, criterion)
 		train(train_data_loader, model, criterion, optimizer, epoch)
-		test(test_data_loader, model)
 		model_to_save = {
 			"epoch" : epoch + 1,
 			'state_dict': model.state_dict(),
@@ -180,7 +180,7 @@ def sample_data():
 	return train_data_loader, test_data_loader
 
 def train(data, model, criterion, optimizer, epoch):
-	print ("Training ...")
+	print ("******** Training ********")
 	total_loss = 0
 	model.train()
 	for batch_idx, img_triplet in enumerate(data):
@@ -198,9 +198,7 @@ def train(data, model, criterion, optimizer, epoch):
 		target = Variable(target)
 		
 		#Calculate loss
-		loss_triplet = criterion(dist_E1_E2, dist_E1_E3, target)
-		loss_embedd = E1.norm(2) + E2.norm(2) + E3.norm(2)
-		loss = loss_triplet + 0.001*loss_embedd
+		loss = criterion(dist_E1_E2, dist_E1_E3, target)
 		total_loss += loss
 
 		optimizer.zero_grad()
@@ -211,27 +209,42 @@ def train(data, model, criterion, optimizer, epoch):
 		if (batch_idx%log_step == 0) and (batch_idx!=0):
 			print('Train Epoch: {} [{}/{}] \t Loss: {:.4f}'.format(epoch, batch_idx, len(data), total_loss/log_step))
 			total_loss = 0
+	print ("****************")
 
-def test(data, model):
-	print ("Testing ...")
-	model.eval()
-	accuracy = 0
-	for batch_idx, img_triplet in enumerate(data):
-		anchor_img, pos_img, neg_img = img_triplet
-		if args.cuda:
-			anchor_img, pos_img, neg_img = anchor_img.cuda(), pos_img.cuda(), neg_img.cuda()
-		anchor_img, pos_img, neg_img = Variable(anchor_img), Variable(pos_img), Variable(neg_img)
-		E1, E2, E3 = model(anchor_img, pos_img, neg_img)
-		dist_E1_E2 = F.pairwise_distance(E1, E2, 2)
-		dist_E1_E3 = F.pairwise_distance(E1, E3, 2)
+def test(data, model, criterion):
+	print ("******** Testing ********")
+	with torch.no_grad():
+		model.eval()
+		accuracies = [0,0,0]
+		acc_threshes = [0, 0.2, 0.5]
+		total_loss = 0
+		for batch_idx, img_triplet in enumerate(data):
+			anchor_img, pos_img, neg_img = img_triplet
+			if args.cuda:
+				anchor_img, pos_img, neg_img = anchor_img.cuda(), pos_img.cuda(), neg_img.cuda()
+			anchor_img, pos_img, neg_img = Variable(anchor_img), Variable(pos_img), Variable(neg_img)
+			E1, E2, E3 = model(anchor_img, pos_img, neg_img)
+			dist_E1_E2 = F.pairwise_distance(E1, E2, 2)
+			dist_E1_E3 = F.pairwise_distance(E1, E3, 2)
 
-		prediction = (dist_E1_E3 - dist_E1_E2 - args.margin/2.0).cpu().data
-		prediction = prediction.view(prediction.numel())
-		prediction = (prediction > 0).float()
-		batch_acc = prediction.sum()*1.0/prediction.numel()
-		accuracy += batch_acc
-	accuracy /= len(data)
-	print('Test Accuracy: {}'.format(accuracy))
+			target = torch.FloatTensor(dist_E1_E2.size()).fill_(-1)
+			if args.cuda:
+				target = target.cuda()
+			target = Variable(target)
+
+			loss = criterion(dist_E1_E2, dist_E1_E3, target)
+			total_loss += loss
+
+			for i in range(len(accuracies)):
+				prediction = (dist_E1_E3 - dist_E1_E2 - args.margin*acc_threshes[i]).cpu().data
+				prediction = prediction.view(prediction.numel())
+				prediction = (prediction > 0).float()
+				batch_acc = prediction.sum()*1.0/prediction.numel()
+				accuracies[i] += batch_acc
+		print('Test Loss: {}'.format(total_loss/len(data)))
+		for i in range(len(accuracies)):
+			print('Test Accuracy with diff = {}% of margin: {}'.format(acc_threshes[i]*100, accuracies[i]/len(data)))
+	print ("****************")
 
 def save_checkpoint(state, file_name):
     torch.save(state, file_name)
@@ -247,9 +260,7 @@ if __name__ == '__main__':
 	parser.add_argument('--batch_size', type=int, default=64, metavar='N',
 	                help='input batch size for training (default: 64)')
 	parser.add_argument('--lr', type=float, default=0.01, metavar='LR',
-	                help='learning rate (default: 0.01)')
-	parser.add_argument('--momentum', type=float, default=0.5, metavar='M',
-	                help='SGD momentum (default: 0.5)')
+	                help='learning rate (default: 0.0001)')
 	parser.add_argument('--margin', type=float, default=1.0, metavar='M',
 	                help='margin for triplet loss (default: 1.0)')
 	parser.add_argument('--ckp', default=None, type=str,
