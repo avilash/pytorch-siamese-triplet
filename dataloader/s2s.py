@@ -65,6 +65,7 @@ class S2S(object):
             train_pair = pairs[pair_idx]
             product_img_name = rdict[train_pair['product']]
             pos_img_name = train_pair['photo']
+            pos_img_bbox = train_pair['bbox']
             if self.check_if_img_exists(product_img_name) and self.check_if_img_exists(pos_img_name):
                 break
 
@@ -74,6 +75,7 @@ class S2S(object):
             neg_product_img_name = neg_pair['product']
             if neg_product_img_name is not product_img_name:
                 neg_img_name = neg_pair['photo']
+                neg_img_bbox = neg_pair['bbox']
                 if self.check_if_img_exists(neg_img_name):
                     break
 
@@ -84,7 +86,7 @@ class S2S(object):
         pos_img_name = os.path.join(self.__base_path, "JPEGImages", str(pos_img_name) + ".jpg")
         neg_img_name = os.path.join(self.__base_path, "JPEGImages", str(neg_img_name) + ".jpg")
 
-        return sku, product_img_name, pos_img_name, neg_img_name
+        return sku, (product_img_name, None), (pos_img_name, pos_img_bbox), (neg_img_name, neg_img_bbox)
 
     def check_if_img_exists(self, img_name):
         img_name = str(img_name).zfill(9)

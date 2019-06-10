@@ -41,6 +41,15 @@ def vis_with_paths(img_paths, txts, dst):
 		imgs.append(cv2.imread(img_path))
 	visualise(imgs, txts, dst)
 
+def vis_with_paths_and_bboxes(img_details, txts, dst):
+	imgs = []
+	for img_path, bbox in img_details:
+		img = cv2.imread(img_path)
+		if bbox is not None:
+			img = img[bbox['top']:bbox['top']+bbox['height'], bbox['left']:bbox['left']+bbox['width']]
+		imgs.append(img)
+	visualise(imgs, txts, dst)
+
 def main():
 	
 	torch.manual_seed(1)
@@ -107,15 +116,15 @@ def sample_data():
 		train_len, test_len = triplet_loader.load()
 		print "Train pairs = %d"%(train_len)
 		print "Test pairs = %d"%(test_len)
-		sku, product_img_name, pos_img_name, neg_img_name = triplet_loader.getTriplet()
-		# vis_with_paths([product_img_name, pos_img_name, neg_img_name], ["", "", sku], "")
+		sku, product_img_details, pos_img_details, neg_img_details = triplet_loader.getTriplet()
+		# vis_with_paths_and_bboxes([product_img_details, pos_img_details, neg_img_details], [sku, sku, sku], "")
 		# return
-		for i in range(5000):
-			sku, product_img_name, pos_img_name, neg_img_name = triplet_loader.getTriplet()
-			train_triplets.append([product_img_name, pos_img_name, neg_img_name])
-		for i in range(1000):
-			sku, product_img_name, pos_img_name, neg_img_name = triplet_loader.getTriplet(set="test")
-			test_triplets.append([product_img_name, pos_img_name, neg_img_name])
+		for i in range(args.num_train_samples):
+			sku, product_img_details, pos_img_details, neg_img_details = triplet_loader.getTriplet()
+			train_triplets.append([product_img_details, pos_img_details, neg_img_details])
+		for i in range(args.num_test_samples):
+			sku, product_img_details, pos_img_details, neg_img_details = triplet_loader.getTriplet(set="test")
+			test_triplets.append([product_img_details, pos_img_details, neg_img_details])
 
 		train_data_loader = torch.utils.data.DataLoader(
 		TripletImageLoader(train_triplets,
