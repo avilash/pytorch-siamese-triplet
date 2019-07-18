@@ -12,9 +12,8 @@ from torch.autograd import Variable
 import torch.backends.cudnn as cudnn
 
 from model import net, embedding
-from dataloader import gor, s2s, mnist
-from triplet_img_loader import TripletImageLoader
-from triplet_mnist_loader import TripletMNISTLoader
+from dataloader import gor, s2s, mnist, vggface2
+from triplet_img_loader import TripletS2SLoader, TripletVGGFaceLoader, TripletMNISTLoader
 
 from gen_utils import make_dir_if_not_exist
 
@@ -54,14 +53,13 @@ def main():
 	
 	torch.manual_seed(1)
 	if args.cuda:
-		torch.cuda.set_device(1)
 		torch.cuda.manual_seed(1)
 
 	exp_dir = os.path.join("data", args.exp_name)
 	make_dir_if_not_exist(exp_dir)
 
 	embeddingNet = None
-	if args.dataset == 's2s':
+	if (args.dataset == 's2s') or (args.dataset == 'vggface2'):
 		embeddingNet = embedding.EmbeddingResnet()
 	elif (args.dataset == 'mnist') or (args.dataset == 'fmnist'):
 		embeddingNet = embedding.EmbeddingLeNet()
@@ -70,8 +68,8 @@ def main():
 		return
 
 	model = net.TripletNet(embeddingNet)
-	if args.cuda:
-		model = model.cuda()
+	model = nn.DataParallel(model, device_ids=args.gpu_devices)
+	model = model.to(device)
 
 	if args.ckp:
 		if os.path.isfile(args.ckp):
@@ -100,8 +98,9 @@ def main():
 			"epoch" : epoch + 1,
 			'state_dict': model.state_dict(),
 		}
-		file_name = os.path.join(exp_dir, "checkpoint_" + str(epoch) + ".pth")
-		save_checkpoint(model_to_save, file_name)
+		if epoch%args.ckp_freq == 0:
+			file_name = os.path.join(exp_dir, "checkpoint_" + str(epoch) + ".pth")
+			save_checkpoint(model_to_save, file_name)
 
 def sample_data():
 	train_data_loader = None
@@ -123,23 +122,54 @@ def sample_data():
 			sku, product_img_details, pos_img_details, neg_img_details = triplet_loader.getTriplet()
 			train_triplets.append([product_img_details, pos_img_details, neg_img_details])
 		for i in range(args.num_test_samples):
-			sku, product_img_details, pos_img_details, neg_img_details = triplet_loader.getTriplet(set="test")
+			sku, product_img_details, pos_img_details, neg_img_details = triplet_loader.getTriplet(mode="test")
 			test_triplets.append([product_img_details, pos_img_details, neg_img_details])
 
 		train_data_loader = torch.utils.data.DataLoader(
-		TripletImageLoader(train_triplets,
+		TripletS2SLoader(train_triplets,
 		               transform=transforms.Compose([
 		                   transforms.ToTensor(),
 		                   transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
 		               ])),
 		batch_size=args.batch_size, shuffle=True, **kwargs)
 		test_data_loader = torch.utils.data.DataLoader(
-		TripletImageLoader(test_triplets,
+		TripletS2SLoader(test_triplets,
 		               transform=transforms.Compose([
 		                   transforms.ToTensor(),
 		                   transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
 		               ])),
 		batch_size=args.batch_size, shuffle=True, **kwargs)
+
+	if args.dataset == 'vggface2':
+		train_triplets = []
+		test_triplets = []
+		triplet_loader = vggface2.VGGFace2()
+		train_len, test_len = triplet_loader.load()
+		print "Train pairs = %d"%(train_len)
+		print "Test pairs = %d"%(test_len)
+
+		for i in range(args.num_train_samples):
+			anchor_img_path, pos_img_path, neg_img_path = triplet_loader.getTriplet()
+			train_triplets.append([anchor_img_path, pos_img_path, neg_img_path])
+		for i in range(args.num_test_samples):
+			anchor_img_path, pos_img_path, neg_img_path = triplet_loader.getTriplet(mode='test')
+			test_triplets.append([anchor_img_path, pos_img_path, neg_img_path])
+
+		train_data_loader = torch.utils.data.DataLoader(
+		TripletVGGFaceLoader(train_triplets,
+		               transform=transforms.Compose([
+		                   transforms.ToTensor(),
+		                   transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
+		               ])),
+		batch_size=args.batch_size, shuffle=True, **kwargs)
+		test_data_loader = torch.utils.data.DataLoader(
+		TripletVGGFaceLoader(test_triplets,
+		               transform=transforms.Compose([
+		                   transforms.ToTensor(),
+		                   transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
+		               ])),
+		batch_size=args.batch_size, shuffle=True, **kwargs)
+
 	
 	elif (args.dataset == 'mnist') or (args.dataset == 'fmnist'):
 		train_triplets = []
@@ -185,19 +215,15 @@ def train(data, model, criterion, optimizer, epoch):
 	model.train()
 	for batch_idx, img_triplet in enumerate(data):
 		anchor_img, pos_img, neg_img = img_triplet
-		if args.cuda:
-			anchor_img, pos_img, neg_img = anchor_img.cuda(), pos_img.cuda(), neg_img.cuda()
+		anchor_img, pos_img, neg_img = anchor_img.to(device), pos_img.to(device), neg_img.to(device)
 		anchor_img, pos_img, neg_img = Variable(anchor_img), Variable(pos_img), Variable(neg_img)
 		E1, E2, E3 = model(anchor_img, pos_img, neg_img)
 		dist_E1_E2 = F.pairwise_distance(E1, E2, 2)
 		dist_E1_E3 = F.pairwise_distance(E1, E3, 2)
-
-		target = torch.FloatTensor(dist_E1_E2.size()).fill_(-1)
-		if args.cuda:
-			target = target.cuda()
-		target = Variable(target)
 		
-		#Calculate loss
+		target = torch.FloatTensor(dist_E1_E2.size()).fill_(-1)
+		target = target.to(device)
+		target = Variable(target)
 		loss = criterion(dist_E1_E2, dist_E1_E3, target)
 		total_loss += loss
 
@@ -220,16 +246,14 @@ def test(data, model, criterion):
 		total_loss = 0
 		for batch_idx, img_triplet in enumerate(data):
 			anchor_img, pos_img, neg_img = img_triplet
-			if args.cuda:
-				anchor_img, pos_img, neg_img = anchor_img.cuda(), pos_img.cuda(), neg_img.cuda()
+			anchor_img, pos_img, neg_img = anchor_img.to(device), pos_img.to(device), neg_img.to(device)
 			anchor_img, pos_img, neg_img = Variable(anchor_img), Variable(pos_img), Variable(neg_img)
 			E1, E2, E3 = model(anchor_img, pos_img, neg_img)
 			dist_E1_E2 = F.pairwise_distance(E1, E2, 2)
 			dist_E1_E3 = F.pairwise_distance(E1, E3, 2)
 
 			target = torch.FloatTensor(dist_E1_E2.size()).fill_(-1)
-			if args.cuda:
-				target = target.cuda()
+			target = target.to(device)
 			target = Variable(target)
 
 			loss = criterion(dist_E1_E2, dist_E1_E3, target)
@@ -255,11 +279,15 @@ if __name__ == '__main__':
 	                help='name of experiment')
 	parser.add_argument('--cuda', action='store_true', default=False,
 	                help='enables CUDA training')
+	parser.add_argument("--gpu_devices", type=int, nargs='+', default=None, 
+					help="List of GPU Devices to train on")
 	parser.add_argument('--epochs', type=int, default=10, metavar='N',
 	                help='number of epochs to train (default: 10)')
+	parser.add_argument('--ckp_freq', type=int, default=1, metavar='N',
+	                help='Checkpoint Frequency (default: 1)')
 	parser.add_argument('--batch_size', type=int, default=64, metavar='N',
 	                help='input batch size for training (default: 64)')
-	parser.add_argument('--lr', type=float, default=0.01, metavar='LR',
+	parser.add_argument('--lr', type=float, default=0.0001, metavar='LR',
 	                help='learning rate (default: 0.0001)')
 	parser.add_argument('--margin', type=float, default=1.0, metavar='M',
 	                help='margin for triplet loss (default: 1.0)')
@@ -277,8 +305,15 @@ if __name__ == '__main__':
 	parser.add_argument('--train_log_step', type=int, default=100, metavar='M',
 	                help='Number of iterations after which to log the loss')
 
-	global args
+	global args, device
 	args = parser.parse_args()
 	args.cuda = args.cuda and torch.cuda.is_available()
 	cfg_from_file("config/test.yaml")
+
+	if args.cuda:
+		device = 'cuda'
+		if args.gpu_devices is None:
+			args.gpu_devices = [0]
+	else:
+		device = 'cpu'
 	main()

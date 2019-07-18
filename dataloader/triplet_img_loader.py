@@ -7,7 +7,7 @@ import numpy as np
 import torch.utils.data
 import torchvision.transforms as transforms
 
-class TripletImageLoader(torch.utils.data.Dataset):
+class TripletS2SLoader(torch.utils.data.Dataset):
     def __init__(self, triplets, transform=None):
         self.triplets = triplets
         self.transform = transform
@@ -47,6 +47,68 @@ class TripletImageLoader(torch.utils.data.Dataset):
             img2 = self.transform(img2)
             img3 = self.transform(img3)
         
+        return img1, img2, img3
+
+    def __len__(self):
+        return len(self.triplets)
+
+class TripletVGGFaceLoader(torch.utils.data.Dataset):
+    def __init__(self, triplets, transform=None):
+        self.triplets = triplets
+        self.transform = transform
+
+    def __getitem__(self, index):
+        img1_pth, img2_pth, img3_pth = self.triplets[index]
+        img1 = cv2.imread(img1_pth)
+        img2 = cv2.imread(img2_pth)
+        img3 = cv2.imread(img3_pth)
+
+        try:
+            img1 = cv2.resize(img1, (228, 228))
+        except Exception, e:
+            img1 = np.zeros((228, 228, 3), dtype=np.uint8)
+            print ("Expeption1")
+
+        try:
+            img2 = cv2.resize(img2, (228, 228))
+        except Exception, e:
+            img2 = np.zeros((228, 228, 3), dtype=np.uint8)
+            print ("Expeption2")
+
+            
+        try:
+            img3 = cv2.resize(img3, (228, 228))
+        except Exception, e:
+            img3 = np.zeros((228, 228, 3), dtype=np.uint8)
+            print ("Expeption3")
+
+
+        if self.transform is not None:
+            img1 = self.transform(img1)
+            img2 = self.transform(img2)
+            img3 = self.transform(img3)
+        
+        return img1, img2, img3
+
+    def __len__(self):
+        return len(self.triplets)
+
+class TripletMNISTLoader(torch.utils.data.Dataset):
+    def __init__(self, triplets, transform=None):
+        self.triplets = triplets
+        self.transform = transform
+
+    def __getitem__(self, index):
+        img1, img2, img3 = self.triplets[index] 
+        img1 = np.expand_dims(img1, axis=2) 
+        img2 = np.expand_dims(img2, axis=2) 
+        img3 = np.expand_dims(img3, axis=2) 
+
+        if self.transform is not None:
+            img1 = self.transform(img1)
+            img2 = self.transform(img2)
+            img3 = self.transform(img3)
+
         return img1, img2, img3
 
     def __len__(self):

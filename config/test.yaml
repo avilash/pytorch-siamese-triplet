@@ -1,8 +1,10 @@
 RESNET:
-  FIXED_BLOCKS: 3
+  FIXED_BLOCKS: 2
 
 DATASETS:
   GOR:
     HOME: ""
   S2S:
+    HOME: ""
+  VGGFACE2:
     HOME: ""

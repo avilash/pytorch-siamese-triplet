@@ -44,12 +44,12 @@ class S2S(object):
 
         return total_train_pairs, total_test_pairs
 
-    def getTriplet(self, sku=None, set="train"):
+    def getTriplet(self, sku=None, mode="train"):
         if sku is None:
             num_skus = len(self.__skus)
             sku_idx = random.randint(0, num_skus-1)
             sku = self.__skus[sku_idx]
-        if set is 'train':
+        if mode is 'train':
             pairs = self.__train_pairs[sku]
         else:
             pairs = self.__test_pairs[sku]
