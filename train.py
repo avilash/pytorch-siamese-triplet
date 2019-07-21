@@ -295,7 +295,7 @@ if __name__ == '__main__':
 	                help='path to load checkpoint')
 
 	parser.add_argument('--dataset', type=str, default='mnist', metavar='M',
-	                help='number of training samples (default: 3000)')
+	                help='Dataset (default: mnist)')
 	
 	parser.add_argument('--num_train_samples', type=int, default=50000, metavar='M',
 	                help='number of training samples (default: 3000)')

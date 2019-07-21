@@ -13,16 +13,16 @@ class GOR(object):
     	self.__imgs_dict = {}
     	base_path = cfg.DATASETS.GOR.HOME
     	for obj_class in self.__classes:
-			result_path = os.path.join(base_path, obj_class, "result")
-			class_dict = []
-			for pose in os.listdir(result_path):
-				pose_path = os.path.join(result_path, pose)
-				pose_crop_img_path = os.path.join(pose_path, "img_crop")
-				imgs = os.listdir(pose_crop_img_path)
-				for i,img in enumerate(imgs):
-					imgs[i] = os.path.join(pose_crop_img_path, img)
-				class_dict.append(imgs)
-			self.__imgs_dict[str(obj_class)] = class_dict
+            result_path = os.path.join(base_path, obj_class, "result")
+            class_dict = []
+            for pose in os.listdir(result_path):
+            	pose_path = os.path.join(result_path, pose)
+            	pose_crop_img_path = os.path.join(pose_path, "img_crop")
+            	imgs = os.listdir(pose_crop_img_path)
+            	for i,img in enumerate(imgs):
+            		imgs[i] = os.path.join(pose_crop_img_path, img)
+            	class_dict.append(imgs)
+            self.__imgs_dict[str(obj_class)] = class_dict
 
     def getTriplet(self):
     	num_classes = len(self.__classes)

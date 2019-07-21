@@ -10,6 +10,7 @@ Popular uses of such networks being -
 
 ### Installation
 ---
+Install [PyTorch](https://pytorch.org/get-started/locally/)
 ``` 
 pip install -r requirements.txt
 ```
@@ -24,10 +25,18 @@ This by default will train on the MNIST dataset
 ### MNIST / FashionMNIST
 ---
 ``` 
-python train.py --cuda --dataset fmnist
+python train.py --cuda --dataset <manist>/<fmnist>
 ```
-Parameter **exp_name** to be passed as either **mnist** or **fmist**
-
+To create a **tSNE** visualisation
+``` 
+python tsne.py --ckp <path to model>
+```
+The embeddings and the labels are stored in the experiment folder as a pickle file, and you do not have to run the model everytime you create a visualisation. Just pass the saved embeddings as the --pkl parameter
+``` 
+python tsne.py --pkl <path to stored embeddings>
+```
+Sample tSNE visualisation on MNIST 
+![tSNE](images/tSNE_mnist.jpg "tSNE visualisation on MNIST")
 ### [VGGFace2](http://www.robots.ox.ac.uk/~vgg/data/vgg_face2/)
 ---
  Specify the location of the dataset in test.yaml
@@ -44,4 +53,4 @@ Parameter **exp_name** to be passed as either **mnist** or **fmist**
 - [x] Train on MNIST / FashionMNIST
 - [x] Train on a public dataset
 - [x] Multi GPU Training
-- [x] - [ ] Include popular models - ResneXT / Resnet / VGG / Inception
+- [ ] Include popular models - ResneXT / Resnet / VGG / Inception
