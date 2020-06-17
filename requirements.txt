@@ -7,3 +7,5 @@ pyaml
 scikit-learn
 scipy
 tqdm
+torch
+torchvision

@@ -1,19 +1,25 @@
 import os
 import random
 import json
-from base_config import cfg
+from config.base_config import cfg
 
-import cv2
 
 class S2S(object):
 
     def __init__(self):
-    	self.__base_path = ""
-        self.__skus = ['bags', 'belts', 'dresses', 'eyewear', 'footwear', 'hats', 'leggings', 'outerwear', 'pants', 'skirts', 'tops']
+        self.__imgs_dict = {}
+        self.__base_path = ""
+
+        self.__train_pairs = {}
+        self.__test_pairs = {}
+        self.__retrieval_dict = {}
+
+        self.__skus = ['bags', 'belts', 'dresses', 'eyewear', 'footwear', 'hats', 'leggings', 'outerwear', 'pants',
+                       'skirts', 'tops']
 
     def load(self):
-    	self.__imgs_dict = {}
-    	self.__base_path = cfg.DATASETS.S2S.HOME
+        self.__imgs_dict = {}
+        self.__base_path = cfg.DATASETS.S2S.HOME
 
         self.__train_pairs = {}
         self.__test_pairs = {}
@@ -23,20 +29,20 @@ class S2S(object):
         total_test_pairs = 0
 
         for sku in self.__skus:
-            train_json = os.path.join(self.__base_path, "meta", "meta", "json", "train_pairs_"+sku+".json")
-            with open(train_json) as json_file:  
+            train_json = os.path.join(self.__base_path, "meta", "meta", "json", "train_pairs_" + sku + ".json")
+            with open(train_json) as json_file:
                 train_pairs = json.load(json_file)
                 total_train_pairs += len(train_pairs)
                 self.__train_pairs[sku] = train_pairs
 
-            test_json = os.path.join(self.__base_path, "meta", "meta", "json", "test_pairs_"+sku+".json")
-            with open(test_json) as json_file:  
+            test_json = os.path.join(self.__base_path, "meta", "meta", "json", "test_pairs_" + sku + ".json")
+            with open(test_json) as json_file:
                 test_pairs = json.load(json_file)
                 total_test_pairs += len(test_pairs)
                 self.__test_pairs[sku] = test_pairs
 
-            retrieval_json = os.path.join(self.__base_path, "meta", "meta", "json", "retrieval_"+sku+".json")
-            with open(retrieval_json) as json_file:  
+            retrieval_json = os.path.join(self.__base_path, "meta", "meta", "json", "retrieval_" + sku + ".json")
+            with open(retrieval_json) as json_file:
                 sku_retrieval_pairs = json.load(json_file)
             self.__retrieval_dict[sku] = {}
             for pair in sku_retrieval_pairs:
@@ -47,7 +53,7 @@ class S2S(object):
     def getTriplet(self, sku=None, mode="train"):
         if sku is None:
             num_skus = len(self.__skus)
-            sku_idx = random.randint(0, num_skus-1)
+            sku_idx = random.randint(0, num_skus - 1)
             sku = self.__skus[sku_idx]
         if mode is 'train':
             pairs = self.__train_pairs[sku]
@@ -61,7 +67,7 @@ class S2S(object):
         pos_img_name = ""
 
         while True:
-            pair_idx = random.randint(0, pair_len-1)
+            pair_idx = random.randint(0, pair_len - 1)
             train_pair = pairs[pair_idx]
             product_img_name = rdict[train_pair['product']]
             pos_img_name = train_pair['photo']
@@ -70,7 +76,7 @@ class S2S(object):
                 break
 
         while True:
-            neg_pair_idx = random.randint(0, pair_len-1)
+            neg_pair_idx = random.randint(0, pair_len - 1)
             neg_pair = pairs[neg_pair_idx]
             neg_product_img_name = neg_pair['product']
             if neg_product_img_name is not product_img_name:

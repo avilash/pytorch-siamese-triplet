@@ -1,9 +1,11 @@
 import os.path as osp
 import sys
 
-def add_path(path):
-    if path not in sys.path:
-        sys.path.insert(0, path)
+
+def add_path(res_path):
+    if res_path not in sys.path:
+        sys.path.insert(0, res_path)
+
 
 this_dir = osp.dirname(__file__)
 

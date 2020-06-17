@@ -1,5 +1,4 @@
 from easydict import EasyDict as edict
-import math
 
 __C = edict()
 
@@ -15,6 +14,7 @@ __C.DATASETS.S2S = edict()
 __C.DATASETS.S2S.HOME = ""
 __C.DATASETS.VGGFACE2 = edict()
 __C.DATASETS.VGGFACE2.HOME = ""
+
 
 def _merge_a_into_b(a, b):
     """Merge config dictionary a into config dictionary b, clobbering the
@@ -48,6 +48,7 @@ def _merge_a_into_b(a, b):
         else:
             b[k] = v
 
+
 def cfg_from_file(filename):
     """Load a config file and merge it into the default options."""
     import yaml
@@ -55,6 +56,7 @@ def cfg_from_file(filename):
         yaml_cfg = edict(yaml.load(f, Loader=yaml.FullLoader))
 
     _merge_a_into_b(yaml_cfg, __C)
+
 
 def cfg_from_list(cfg_list):
     """Set config keys via list (e.g., from command line)."""
@@ -70,7 +72,7 @@ def cfg_from_list(cfg_list):
         assert subkey in d
         try:
             value = literal_eval(v)
-        except:
+        except Exception as e:
             # handle the case when v is a string literal
             value = v
         assert type(value) == type(d[subkey]), \
