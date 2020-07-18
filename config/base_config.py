@@ -8,12 +8,10 @@ __C.RESNET = edict()
 __C.RESNET.FIXED_BLOCKS = 1
 
 __C.DATASETS = edict()
-__C.DATASETS.GOR = edict()
-__C.DATASETS.GOR.HOME = ""
-__C.DATASETS.S2S = edict()
-__C.DATASETS.S2S.HOME = ""
 __C.DATASETS.VGGFACE2 = edict()
 __C.DATASETS.VGGFACE2.HOME = ""
+__C.DATASETS.CUSTOM = edict()
+__C.DATASETS.CUSTOM.HOME = ""
 
 
 def _merge_a_into_b(a, b):

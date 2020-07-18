@@ -58,8 +58,8 @@ class MNIST_DS(object):
         neg_label_idx_map = label_idx_map[neg_label]
         neg_img_idx = neg_label_idx_map[random.randint(0, len(neg_label_idx_map) - 1)]
 
-        pos_anchor = data[pos_img_anchor_idx].numpy()
+        pos_anchor_img = data[pos_img_anchor_idx].numpy()
         pos_img = data[pos_img_idx].numpy()
         neg_img = data[neg_img_idx].numpy()
 
-        return int(pos_label), int(neg_label), pos_anchor, pos_img, neg_img
+        return pos_anchor_img, pos_img, neg_img
